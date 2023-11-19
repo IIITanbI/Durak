@@ -16,11 +16,6 @@ public class DurakHub : Hub
     public async Task JoinGame(string gameId, string userName)
     {
         await this.Groups.AddToGroupAsync(Context.ConnectionId, gameId);
-
-        var a = Clients.Client(Context.ConnectionId);
-        var b = Clients.Caller;
-        var c = a == b;
-
         await Clients.Caller.SendAsync("Joined");
     }
 
