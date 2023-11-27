@@ -9,16 +9,16 @@ import { polyfill } from 'mobile-drag-drop';
 // optional import of scroll behaviour
 import { scrollBehaviourDragImageTranslateOverride } from "mobile-drag-drop/scroll-behaviour";
 
-polyfill( {
+polyfill({
   // use this to make use of the scroll behaviour
   dragImageTranslateOverride: scrollBehaviourDragImageTranslateOverride
-} );
+});
 
 // workaround to make scroll prevent work in iOS Safari > 10
 try {
-  window.addEventListener( "touchmove", function() { }, { passive: false } );
+  window.addEventListener("touchmove", function () { }, { passive: false });
 }
-catch(e){}
+catch (e) { }
 
 interface Card {
   rank: string;
@@ -40,6 +40,7 @@ interface GameState {
   playerWhoHodit: string;
   playerWhoOtbivaetsya: string;
   playerWhoPodkiduvaet: string;
+  action: any;
 }
 
 @Component({
@@ -515,14 +516,20 @@ export class AppComponent {
     console.log(`Joined ok: ${result}`);
   }
 
-  pass(){
+  pass() {
     this.gameAction('Pass');
   }
 
-  zabiraet(){
+  zabiraet() {
     this.gameAction('Zabiraet');
   }
-  
+
+  canZabrat(): boolean {
+    return this.username === this.gameState.playerWhoOtbivaetsya
+      && this.gameState.table.length > 0
+      && this.gameState.table.some(x => x.item2 === null);
+  }
+
   async gameAction(action: any, card?: Card, cardTo?: Card) {
     let result = await this.connection.invoke<string>("GameAction", this.gameId, this.username, action, card, cardTo).catch((err) => console.error(err));
     console.log(`Action ok: ${result}`);

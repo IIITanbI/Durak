@@ -1,5 +1,6 @@
 ﻿using Durak.Logic;
 using Microsoft.AspNetCore.SignalR;
+using System;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
@@ -18,6 +19,12 @@ public class DurakHub : Hub
     static readonly ConcurrentDictionary<string, List<string>> PlayersLobby = [];
     static readonly ConcurrentDictionary<string, Dictionary<string, string>> GameUsers = [];
 
+    public ILogger<DurakHub> Log { get; }
+
+    public DurakHub(ILogger<DurakHub> log)
+    {
+        Log = log;
+    }
     public async Task<string> JoinGame(string gameId, string userName)
     {
         if (!Games.ContainsKey(gameId))
@@ -105,7 +112,17 @@ public class DurakHub : Hub
                 throw new Exception("Game does not exist");
             }
 
-            game.DoAction(player, action, card, cardTo);
+            Log.LogInformation("Before Action {action} ({card}) to ({cardTo}). Gamestate: {state}", action, card, cardTo, JsonSerializer.Serialize(game));
+            try
+            {
+                game.DoAction(player, action, card, cardTo);
+            }
+            catch (Exception ex)
+            {
+                Log.LogInformation("Exception: {ex}", ex);
+                Console.WriteLine(ex.ToString());
+                throw;
+            }
 
             foreach (var p in game.Players)
             {

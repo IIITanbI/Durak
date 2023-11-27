@@ -2,6 +2,14 @@
     <div>
         <button (click)="start()">Start</button>
         {{this.username}}
+        <div> Last action: {{gameState.action}}
+            <br>
+            Hodit: {{gameState.playerWhoHodit}}
+            <br>
+            Otbivaetsya: {{gameState.playerWhoOtbivaetsya}}
+            <br>
+            Podkiduvaet: {{gameState.playerWhoPodkiduvaet}}
+        </div>
     </div>
     <div style="display: flex;  flex-direction: column; justify-content: space-between; flex-grow: 1;">
         <div style="display: flex; justify-content: space-between;">
@@ -35,7 +43,7 @@
 
         <div>
             <button (click)="pass()" *ngIf="username == gameState.playerWhoPodkiduvaet">Pass</button>
-            <button (click)="zabiraet()" *ngIf="username == gameState.playerWhoOtbivaetsya && gameState.table.length > 0">Zabrat'</button>
+            <button (click)="zabiraet()" *ngIf="canZabrat()">Zabrat'</button>
 
             <span *ngIf="username == gameState.playerWhoHodit">Your turn</span>
         </div>

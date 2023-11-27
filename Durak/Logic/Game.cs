@@ -1,4 +1,6 @@
-﻿namespace Durak.Logic;
+﻿using System.Text.Json.Serialization;
+
+namespace Durak.Logic;
 
 public enum CardSuite
 {
@@ -60,8 +62,8 @@ public class CardDeck
     public int Count => PlayingCards.Count;
     public bool IsEmpty => Count == 0;
 
-    public PlayingCard TrumpCard => PlayingCards.Last();
     public PlayingCard GetTop() => PlayingCards.Pop();
+    public PlayingCard PeekLast() => PlayingCards.Last();
 }
 
 public class Game
@@ -106,7 +108,7 @@ public class Game
             }
         }
 
-        DeckTrumpCard = CardDeck.TrumpCard;
+        DeckTrumpCard = CardDeck.PeekLast();
 
         int minRank = int.MaxValue;
         string minRankPlayer = null!;
@@ -199,16 +201,17 @@ public class Game
                         throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
                     }
 
-                    PlayerWhoPodkiduvaet = GetNextPlayer(PlayerWhoPodkiduvaet);
+
                     LastConsequencePass++;
                     Logs.Add((player, action));
 
+                    PlayerWhoPodkiduvaet = GetNextPlayer(PlayerWhoPodkiduvaet);
                     if (PlayerWhoPodkiduvaet == PlayerWhoOtbivaetsya)
                     {
                         PlayerWhoPodkiduvaet = GetNextPlayer(PlayerWhoPodkiduvaet);
                     }
 
-                    if (PlayerWhoPodkiduvaet == PlayerWhoHodit && LastConsequencePass == Players.Count - 1)
+                    if (LastConsequencePass == Players.Count - 1)
                     {
                         if (PlayerWhoOtbivaetsyaZabiraet)
                         {
@@ -219,7 +222,6 @@ public class Game
                             if (!Table.Any(x => x.Item2 == null))
                             {
                                 Otboi();
-                                return;
                             }
                         }
                     }
@@ -259,7 +261,7 @@ public class Game
                         PlayerCards[player].Remove(card);
                         LastConsequencePass = 0;
 
-                        if (!CanPodkinutMore())
+                        if (!CanPodkinutMore() && !Table.Any(x => x.Item2 == null))
                         {
                             Otboi();
                         }
@@ -279,7 +281,7 @@ public class Game
 
                     PlayerWhoOtbivaetsyaZabiraet = true;
                     Logs.Add((player, action));
-                    if (!CanPodkinutMore())
+                    if (!CanPodkinutMore() || LastConsequencePass == Players.Count - 1)
                     {
                         Zabiraet();
                     }
