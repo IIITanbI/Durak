@@ -1,0 +1,6 @@
+{
+    "/durakHub": {
+      "target": "https://localhost:7055",
+      "secure": false
+    }
+  }

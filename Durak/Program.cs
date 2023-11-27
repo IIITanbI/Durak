@@ -1,10 +1,14 @@
 using Durak.Hubs;
 using Microsoft.AspNetCore.Http.Connections;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddSignalR();
+builder.Services.AddSignalR().AddJsonProtocol(options => {
+    options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.PayloadSerializerOptions.IncludeFields = true;
+});
 builder.Services.AddControllers();
 
 var app = builder.Build();
@@ -15,7 +19,7 @@ if (builder.Environment.IsDevelopment())
     app.UseCors(builder =>
     {
         builder
-            .WithOrigins("http://localhost:4200")
+            .WithOrigins("http://localhost:4200", "https://7x14xqnb-4200.euw.devtunnels.ms")
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();

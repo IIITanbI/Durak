@@ -1,30 +1,148 @@
 ﻿using Durak.Logic;
 using Microsoft.AspNetCore.SignalR;
+using System.Collections.Concurrent;
+using System.Text.Json;
 
 namespace Durak.Hubs;
 
+public class GameOptions
+{
+    public int PlayerCount => 2;
+}
+
 public class DurakHub : Hub
 {
-    static readonly Dictionary<string, Game> games = [];
+    static readonly ConcurrentDictionary<string, object> Locks = [];
+    static readonly ConcurrentDictionary<string, Game> Games = [];
+    static readonly ConcurrentDictionary<string, GameOptions> GameOptions = [];
+    static readonly ConcurrentDictionary<string, List<string>> PlayersLobby = [];
+    static readonly ConcurrentDictionary<string, Dictionary<string, string>> GameUsers = [];
 
-    public async Task SendMessage(string user, string message)
+    public async Task<string> JoinGame(string gameId, string userName)
     {
-        await this.Groups.AddToGroupAsync("conId", "gameId");
-        await Clients.All.SendAsync("ReceiveMessage", user, message);
-    }
+        if (!Games.ContainsKey(gameId))
+        {
+            throw new Exception("Game does not exist");
+        }
 
-    public async Task JoinGame(string gameId, string userName)
-    {
+        var gameOptions = GameOptions[gameId];
+        List<string> players;
+
+        lock (GetLock(gameId))
+        {
+            players = PlayersLobby[gameId];
+            if (players.Count == gameOptions.PlayerCount)
+            {
+                throw new Exception("Max players");
+            }
+        }
+
         await this.Groups.AddToGroupAsync(Context.ConnectionId, gameId);
-        await Clients.Caller.SendAsync("Joined");
+
+        lock (GetLock(gameId))
+        {
+            players.Add(userName);
+            GameUsers[gameId][userName] = Context.ConnectionId;
+            if (players.Count == gameOptions.PlayerCount)
+            {
+                var game = new Game(players);
+                game.StartGame();
+                //game.Table.Add((new PlayingCard("1", CardSuite.Spades), new PlayingCard("2", CardSuite.Hearts)));
+                //game.Table.Add((new PlayingCard("2", CardSuite.Hearts), new PlayingCard("4", CardSuite.Diamonds)));
+                //game.Table.Add((new PlayingCard("3", CardSuite.Clubs), new PlayingCard("A", CardSuite.Clubs)));
+                //game.Table.Add((new PlayingCard("4", CardSuite.Spades), new PlayingCard("2", CardSuite.Diamonds)));
+                //game.Table.Add((new PlayingCard("5", CardSuite.Diamonds), new PlayingCard("Q", CardSuite.Spades)));
+                //game.Table.Add((new PlayingCard("6", CardSuite.Spades), new PlayingCard("J", CardSuite.Diamonds)));
+                Games[gameId] = game;
+
+                foreach (var p in game.Players)
+                {
+                    var pobj = new
+                    {
+                        PlayerCards = game.PlayerCards[p],
+
+                        // general
+                        cardDeckCount = game.CardDeck.Count,
+                        Table = game.Table,
+                        Game = game,
+                        DeckTrumpCard = game.DeckTrumpCard,
+                        OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
+                        Players = game.Players,
+                        game.PlayerWhoHodit,
+                        game.PlayerWhoOtbivaetsya,
+                        game.PlayerWhoPodkiduvaet,
+                        //Action = action,
+                    };
+
+                    var res = JsonSerializer.Serialize(pobj);
+                    //Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", obj);
+                    Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", pobj);
+                }
+            }
+
+            return $"Game '{gameId}' lobby. Users: {string.Join(',', players)}";
+        }
     }
 
-    public async Task StartGame(string userName)
+    public string CreateGame(string userName)
     {
         var gameId = Guid.NewGuid().ToString("N");
-        var game = new Game();
-        games[gameId] = game;
-
-        await JoinGame(gameId, userName);
+        gameId = "02e6cedee2804d6194ed5da076858f70";
+        Games[gameId] = null!;
+        Locks[gameId] = new object();
+        GameOptions[gameId] = new GameOptions();
+        PlayersLobby[gameId] = [];
+        GameUsers[gameId] = [];
+        return gameId;
     }
+
+    public string GameAction(string gameId, string player, GameActions action, PlayingCard? card, PlayingCard? cardTo)
+    {
+        lock (GetLock(gameId))
+        {
+            if (!Games.TryGetValue(gameId, out Game? game))
+            {
+                throw new Exception("Game does not exist");
+            }
+
+            game.DoAction(player, action, card, cardTo);
+
+
+            //var obj = new
+            //{
+            //    cardDeckCount = game.CardDeck.Count,
+            //    Table = game.Table,
+            //    Game = game,
+            //    Action = action,
+            //};
+            //Clients.Group(gameId).SendAsync("GameState", obj);
+
+            foreach (var p in game.Players)
+            {
+                var pobj = new
+                {
+                    PlayerCards = game.PlayerCards[p],
+
+                    // general
+                    cardDeckCount = game.CardDeck.Count,
+                    Table = game.Table,
+                    Game = game,
+                    Action = action,
+                    DeckTrumpCard = game.DeckTrumpCard,
+                    OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
+                    Players = game.Players,
+                    game.PlayerWhoHodit,
+                    game.PlayerWhoOtbivaetsya,
+                    game.PlayerWhoPodkiduvaet,
+                };
+                //Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", obj);
+                Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", pobj);
+            }
+
+            return "OK";
+        }
+    }
+
+
+    private object GetLock(string gameId) => Locks[gameId];
 }
