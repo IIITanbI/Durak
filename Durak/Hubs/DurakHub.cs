@@ -107,36 +107,25 @@ public class DurakHub : Hub
 
             game.DoAction(player, action, card, cardTo);
 
-
-            //var obj = new
-            //{
-            //    cardDeckCount = game.CardDeck.Count,
-            //    Table = game.Table,
-            //    Game = game,
-            //    Action = action,
-            //};
-            //Clients.Group(gameId).SendAsync("GameState", obj);
-
             foreach (var p in game.Players)
             {
-                var pobj = new
+                var gameState = new
                 {
                     PlayerCards = game.PlayerCards[p],
 
                     // general
                     cardDeckCount = game.CardDeck.Count,
-                    Table = game.Table,
+                    game.Table,
                     Game = game,
                     Action = action,
-                    DeckTrumpCard = game.DeckTrumpCard,
+                    game.DeckTrumpCard,
                     OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
-                    Players = game.Players,
+                    game.Players,
                     game.PlayerWhoHodit,
                     game.PlayerWhoOtbivaetsya,
                     game.PlayerWhoPodkiduvaet,
                 };
-                //Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", obj);
-                Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", pobj);
+                Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", gameState);
             }
 
             return "OK";
@@ -144,5 +133,5 @@ public class DurakHub : Hub
     }
 
 
-    private object GetLock(string gameId) => Locks[gameId];
+    private static object GetLock(string gameId) => Locks[gameId];
 }

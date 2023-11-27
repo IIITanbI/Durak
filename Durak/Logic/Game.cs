@@ -59,12 +59,9 @@ public class CardDeck
 
     public int Count => PlayingCards.Count;
     public bool IsEmpty => Count == 0;
-    public PlayingCard TrumpCard => PlayingCards.Last();
 
-    public PlayingCard GetTop()
-    {
-        return PlayingCards.Pop();
-    }
+    public PlayingCard TrumpCard => PlayingCards.Last();
+    public PlayingCard GetTop() => PlayingCards.Pop();
 }
 
 public class Game
@@ -76,7 +73,7 @@ public class Game
     public CardDeck CardDeck { get; private set; } = null!;
     public PlayingCard DeckTrumpCard { get; private set; } = null!;
     public List<(PlayingCard, PlayingCard?)> Table { get; } = [];
-    public List<PlayingCard> StateBeforePass { get; private set; } = [];
+    public int LastConsequencePass { get; private set; } = 0;
     public List<PlayingCard> OtboiCards { get; } = [];
 
     public GameStates? GameState { get; private set; } = null!;
@@ -84,11 +81,12 @@ public class Game
     public string PlayerWhoHodit { get; private set; } = null!;
     public string PlayerWhoPodkiduvaet { get; private set; } = null!;
     public string PlayerWhoOtbivaetsya => GetNextPlayer(PlayerWhoHodit);
-    public List<string> OtherPlayers => Players.Except(new string[] { PlayerWhoHodit, PlayerWhoOtbivaetsya }).ToList();
+    //public List<string> OtherPlayers => Players.Except(new string[] { PlayerWhoHodit, PlayerWhoOtbivaetsya }).ToList();
 
     public int TurnNumber { get; private set; } = 0;
-    public List<string> GameStatePlayers { get; private set; } = [];
     public bool PlayerWhoOtbivaetsyaZabiraet { get; private set; }
+    public List<(string Player, GameActions Action)> Logs { get; private set; } = [];
+
 
     public Game(IEnumerable<string> players)
     {
@@ -129,21 +127,9 @@ public class Game
 
         GameState = GameStates.PlayerHodit;
         PlayerWhoHodit = minRankPlayer ?? Players[0];
-
-        SetGameStatePlayers(PlayerWhoHodit);
-
         TurnNumber = 1;
     }
 
-    public void SetGameStatePlayers(params string[] players)
-    {
-        if (players.Length == 0)
-        {
-            throw new ArgumentException(null, nameof(players));
-        }
-
-        GameStatePlayers = new List<string>(players);
-    }
     public string GetNextPlayer(string player)
     {
         var index = Players.IndexOf(player);
@@ -152,73 +138,77 @@ public class Game
 
     public void DoAction(string player, GameActions action, PlayingCard? card = null, PlayingCard? cardTo = null)
     {
-        if (!GameStatePlayers.Contains(player))
-        {
-            throw new ArgumentException($"Player '{player}' is not permitted for action");
-        }
-
         if (GameState == GameStates.PlayerHodit)
         {
             if (action == GameActions.Hodit && player == PlayerWhoHodit)
             {
                 ArgumentNullException.ThrowIfNull(card);
-
                 AssertValidPlayerCard(player, card);
 
                 PlayerCards[player].Remove(card);
                 Table.Add((card, null));
+                Logs.Add((player, action));
                 GameState = GameStates.PlayerPodkiduvaetOrPass_OtbivaetsyaOrZabiraet;
                 PlayerWhoPodkiduvaet = PlayerWhoHodit;
-                SetGameStatePlayers(PlayerWhoPodkiduvaet, PlayerWhoOtbivaetsya);
 
                 return;
             }
+            else
+            {
+                throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
+            }
         }
-        else if (GameState == GameStates.PlayerPodkiduvaetOrPass_OtbivaetsyaOrZabiraet)
+
+        if (GameState == GameStates.PlayerPodkiduvaetOrPass_OtbivaetsyaOrZabiraet)
         {
             switch (action)
             {
-                case GameActions.Podkiduvaet when player == PlayerWhoPodkiduvaet:
+                case GameActions.Podkiduvaet:
+                    if (player != PlayerWhoPodkiduvaet)
+                    {
+                        throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
+                    }
+
                     ArgumentNullException.ThrowIfNull(card);
 
                     AssertValidPlayerCard(player, card);
                     AssertValidCardForPodkinut(card);
 
-                    if (!CanPodkinut())
+                    if (!CanPodkinutMore())
                     {
                         throw new ArgumentException("Can not add more cards");
                     }
 
+                    Logs.Add((player, action));
                     Table.Add((card, null));
                     PlayerCards[player].Remove(card);
-                    StateBeforePass.Clear();
+                    //LastConsequencePass = 0;
 
-                    if (!CanPodkinut())
+                    if (!CanPodkinutMore())
                     {
                         if (PlayerWhoOtbivaetsyaZabiraet)
                         {
                             Zabiraet();
                         }
-                        else
-                        {
-                            SetGameStatePlayers(PlayerWhoOtbivaetsya);
-                        }
                     }
 
                     return;
-                case GameActions.Pass when player == PlayerWhoPodkiduvaet:
-                    if (player == PlayerWhoHodit)
+                case GameActions.Pass:
+                    if (player != PlayerWhoPodkiduvaet)
                     {
-                        StateBeforePass = GetTableCards();
+                        throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
                     }
 
                     PlayerWhoPodkiduvaet = GetNextPlayer(PlayerWhoPodkiduvaet);
+                    LastConsequencePass++;
+                    Logs.Add((player, action));
+
                     if (PlayerWhoPodkiduvaet == PlayerWhoOtbivaetsya)
                     {
                         PlayerWhoPodkiduvaet = GetNextPlayer(PlayerWhoPodkiduvaet);
                     }
 
-                    if (PlayerWhoPodkiduvaet == PlayerWhoHodit && GetTableCards().SequenceEqual(StateBeforePass))
+                    if (PlayerWhoPodkiduvaet == PlayerWhoHodit && LastConsequencePass == Players.Count - 1)
                     {
                         if (PlayerWhoOtbivaetsyaZabiraet)
                         {
@@ -231,16 +221,17 @@ public class Game
                                 Otboi();
                                 return;
                             }
-                            SetGameStatePlayers(PlayerWhoOtbivaetsya);
                         }
                     }
-                    else
-                    {
-                        SetGameStatePlayers(PlayerWhoOtbivaetsya, PlayerWhoPodkiduvaet);
-                    }
+
                     return;
-                case GameActions.Otbivaetsya when player == PlayerWhoOtbivaetsya:
+                case GameActions.Otbivaetsya:
                     {
+                        if (player != PlayerWhoOtbivaetsya)
+                        {
+                            throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
+                        }
+
                         ArgumentNullException.ThrowIfNull(card);
                         ArgumentNullException.ThrowIfNull(cardTo);
 
@@ -263,31 +254,34 @@ public class Game
                             throw new ArgumentException($"Card '{Table[index].Item2}' is already beated");
                         }
 
+                        Logs.Add((player, action));
                         Table[index] = (cardTo, card);
                         PlayerCards[player].Remove(card);
-                        StateBeforePass.Clear();
+                        LastConsequencePass = 0;
 
-                        if (!CanPodkinut())
+                        if (!CanPodkinutMore())
                         {
                             Otboi();
-                        }
-                        else
-                        {
-                            SetGameStatePlayers(PlayerWhoOtbivaetsya, PlayerWhoPodkiduvaet);
                         }
 
                         return;
                     }
+                case GameActions.Zabiraet:
+                    if (player != PlayerWhoOtbivaetsya)
+                    {
+                        throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
+                    }
 
-                case GameActions.Zabiraet when player == PlayerWhoOtbivaetsya:
+                    if (PlayerWhoOtbivaetsyaZabiraet)
+                    {
+                        throw new ArgumentException($"Player '{player}' already choose zabiraet");
+                    }
+
                     PlayerWhoOtbivaetsyaZabiraet = true;
-                    if (!CanPodkinut())
+                    Logs.Add((player, action));
+                    if (!CanPodkinutMore())
                     {
                         Zabiraet();
-                    }
-                    else
-                    {
-                        SetGameStatePlayers(PlayerWhoPodkiduvaet);
                     }
                     return;
             }
@@ -296,17 +290,17 @@ public class Game
         throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
     }
 
-    public bool CanPodkinut()
+    public bool CanPodkinutMore()
     {
-        var unbeatedCards = Table.Count(x => x.Item2 == null);
-
-        return unbeatedCards < PlayerCards[PlayerWhoOtbivaetsya].Count && Table.Count < InitCardsCount;
+        return Table.Count(x => x.Item2 == null) < PlayerCards[PlayerWhoOtbivaetsya].Count && Table.Count < InitCardsCount;
     }
 
     public bool ValidCardForPodkinut(PlayingCard card) => GetTableCards().Any(x => x.Rank == card.Rank);
+
     public bool ValidCardForOtbit(PlayingCard card, PlayingCard cardTo) =>
         (card.Suite == cardTo.Suite && CardRanks.Ranks[card.Rank] > CardRanks.Ranks[cardTo.Rank])
         || (card.Suite == DeckTrumpCard.Suite && cardTo.Suite != DeckTrumpCard.Suite);
+
     public bool IsPlayerValidCard(string player, PlayingCard card) => PlayerCards[player].Contains(card);
 
 
@@ -346,8 +340,8 @@ public class Game
         PlayerWhoHodit = GetNextPlayer(PlayerWhoOtbivaetsya);
         PlayerWhoPodkiduvaet = null!;
         PlayerWhoOtbivaetsyaZabiraet = false;
-        StateBeforePass.Clear();
-        SetGameStatePlayers(PlayerWhoHodit, PlayerWhoOtbivaetsya);
+        LastConsequencePass = 0;
+        Logs.Clear();
     }
 
     public void Otboi()
@@ -362,8 +356,8 @@ public class Game
         PlayerWhoHodit = PlayerWhoOtbivaetsya;
         PlayerWhoPodkiduvaet = null!;
         PlayerWhoOtbivaetsyaZabiraet = false;
-        StateBeforePass.Clear();
-        SetGameStatePlayers(PlayerWhoHodit, PlayerWhoOtbivaetsya);
+        LastConsequencePass = 0;
+        Logs.Clear();
     }
 
     public void NaborCart()
