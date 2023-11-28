@@ -1,63 +1,65 @@
-<div style="height: 95vh; display: flex;  flex-direction: column;">
+<div style="height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;">
+
+  <div>
+    <button (click)="start()">Start</button>
+    <br>{{this.username}}
+    <br>Last action: {{gameState.action}}
+    <br>Hodit: {{gameState.playerWhoHodit}}
+    <br>Otbivaetsya: {{gameState.playerWhoOtbivaetsya}}
+    <br>Podkiduvaet: {{gameState.playerWhoPodkiduvaet}}
+    <br>Game state: {{gameState.gameState}}
+  </div>
+
+  <div style="display: flex;  flex-direction: column; justify-content: space-between; flex-grow: 1; ">
+    <div style="display: flex; gap: 5%">
+
+      <div id="deck">
+        <div class="card" [style.background-image]="'url('+getImageName(gameState.deckTrumpCard)+')'">
+          _____({{gameState.cardDeckCount}})
+        </div>
+      </div>
+
+      <ng-container *ngFor="let player of gameState.players">
+        <div style="flex-shrink: 3" *ngIf="player != this.username">
+          <div style="display: flex;">
+            <ng-container *ngFor="let item of [].constructor(gameState.otherPlayersCards[player]); let i = index">
+              <div class="card" style="background-image: url(/assets/cards/back_side.png);"></div>
+            </ng-container>
+          </div>
+          <div><b>{{player}}</b></div>
+        </div>
+      </ng-container>
+    </div>
+
+    <div id="table" dndDropzone (dndDragover)="onDragover($event)" (dndDrop)="onDrop($event, undefined)">
+      <ng-container *ngFor="let tableTuple of gameState.table">
+        <div style="position: relative;">
+          <div class="card" [style.background-image]="'url('+getImageName(tableTuple.item1)+')'" dndDropzone
+            (dndDragover)="onDragover($event)" (dndDrop)="onDrop($event, tableTuple.item1)">
+          </div>
+          <div class="card" style="top: 20px; left: 25px; position: absolute;"
+            [style.background-image]="'url('+getImageName(tableTuple.item2)+')'" *ngIf="tableTuple.item2">
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
     <div>
-        <button (click)="start()">Start</button>
-        {{this.username}}
-        <div> Last action: {{gameState.action}}
-            <br>
-            Hodit: {{gameState.playerWhoHodit}}
-            <br>
-            Otbivaetsya: {{gameState.playerWhoOtbivaetsya}}
-            <br>
-            Podkiduvaet: {{gameState.playerWhoPodkiduvaet}}
-        </div>
+      <button (click)="pass()" *ngIf="canPass()">Pass</button>
+      <button (click)="zabiraet()" *ngIf="canZabrat()">Zabrat'</button>
+
+      <span *ngIf="username == gameState.playerWhoHodit">Your turn</span>
     </div>
-    <div style="display: flex;  flex-direction: column; justify-content: space-between; flex-grow: 1;">
-        <div style="display: flex; justify-content: space-between;">
-            <div id="deck">
-                <div class="card" [style.background-image]="'url('+getImageName(gameState.deckTrumpCard)+')'">
-                    _____({{gameState.cardDeckCount}})
-                </div>
-            </div>
-            <ng-container *ngFor="let player of gameState.players">
-                <div style="display: flex; max-width: 40%;" *ngIf="player != this.username">
-                    <ng-container
-                        *ngFor="let item of [].constructor(gameState.otherPlayersCards[player]); let i = index">
-                        <div class="card" style="background-image: url(/assets/cards/back_side.png);"></div>
-                    </ng-container>
-                </div>
-            </ng-container>
+    <div id="player" style="display: flex; justify-content: center; gap: 10px; position: relative;">
+      <ng-container *ngFor="let card of gameState.playerCards; let i = index;">
+        <div class="card" style="position: relative;" [style.background-image]="'url('+getImageName(card)+')'"
+          [dndDraggable]="card" [dndDisableIf]="draggable.disable" (dndStart)="onDragStart($event)"
+          (dndCopied)="onDraggableCopied($event)" (dndLinked)="onDraggableLinked($event)"
+          (dndMoved)="onDraggableMoved($event)" (dndCanceled)="onDragCanceled($event)" (dndEnd)="onDragEnd($event)">
         </div>
-
-        <div id="table" dndDropzone (dndDragover)="onDragover($event)" (dndDrop)="onDrop($event, undefined)">
-            <ng-container *ngFor="let tableTuple of gameState.table">
-                <div style="position: relative;">
-                    <div class="card" [style.background-image]="'url('+getImageName(tableTuple.item1)+')'" dndDropzone
-                        (dndDragover)="onDragover($event)" (dndDrop)="onDrop($event, tableTuple.item1)">
-                    </div>
-                    <div class="card" style="top: 20px; left: 25px; position: absolute;"
-                        [style.background-image]="'url('+getImageName(tableTuple.item2)+')'" *ngIf="tableTuple.item2">
-                    </div>
-                </div>
-            </ng-container>
-        </div>
-
-        <div>
-            <button (click)="pass()" *ngIf="username == gameState.playerWhoPodkiduvaet">Pass</button>
-            <button (click)="zabiraet()" *ngIf="canZabrat()">Zabrat'</button>
-
-            <span *ngIf="username == gameState.playerWhoHodit">Your turn</span>
-        </div>
-        <div id="player" style="display: flex; justify-content: space-evenly;">
-            <ng-container *ngFor="let card of gameState.playerCards">
-                <div class="card" [style.background-image]="'url('+getImageName(card)+')'" [dndDraggable]="card"
-                    [dndDisableIf]="draggable.disable" (dndStart)="onDragStart($event)"
-                    (dndCopied)="onDraggableCopied($event)" (dndLinked)="onDraggableLinked($event)"
-                    (dndMoved)="onDraggableMoved($event)" (dndCanceled)="onDragCanceled($event)"
-                    (dndEnd)="onDragEnd($event)">
-                </div>
-            </ng-container>
-        </div>
+      </ng-container>
     </div>
+  </div>
 </div>
-<!-- 
+<!--
 <router-outlet></router-outlet> -->

@@ -1,5 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
 import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 import * as signalR from "@microsoft/signalr";
 import { DndDropEvent } from 'ngx-drag-drop';
@@ -40,7 +42,11 @@ interface GameState {
   playerWhoHodit: string;
   playerWhoOtbivaetsya: string;
   playerWhoPodkiduvaet: string;
-  action: any;
+  playerWhoProigral: string;
+  action: string;
+  gameState: 'PlayerHodit' | 'PlayerPodkiduvaetOrPass_OtbivaetsyaOrZabiraet' | 'GameEnd';
+  lastConsequencePass: number;
+  playerWhoOtbivaetsyaZabiraet: boolean;
 }
 
 @Component({
@@ -58,6 +64,7 @@ export class AppComponent {
     .withUrl("/durakHub")
     .build();
 
+  dialogRef: MatDialogRef<DialogContentExampleDialog, any> = null!;
   gameState: GameState = null!;
   gameId: string = null!;
   draggable = {
@@ -69,8 +76,8 @@ export class AppComponent {
     handle: false
   };
 
-  constructor(private route: Router) {
-    const promise = this.connection
+  constructor(private route: Router, public dialog: MatDialog) {
+    const connectionPromise = this.connection
       .start()
       .then(() => console.log('Connection started', this.connection.connectionId))
       .catch((err) => document.write(err));
@@ -78,6 +85,21 @@ export class AppComponent {
     this.connection.on("GameState", (state) => {
       console.log("GAME STATE", state);
       this.gameState = state;
+
+      if (this.gameState.gameState === 'GameEnd') {
+        this.dialogRef = this.dialog.open(DialogContentExampleDialog, { data: { proigral: this.gameState.playerWhoProigral }, });
+        this.dialogRef.afterClosed().subscribe(result => {
+          console.log(`Dialog result: ${result}`);
+          if (result == true) {
+            this.connection.send("RestartGame", this.gameId).catch((err) => console.error(err));
+          }
+        });
+      }
+      else {
+        if (this.dialogRef) {
+          this.dialogRef.close();
+        }
+      }
     });
 
     var res = {
@@ -501,18 +523,18 @@ export class AppComponent {
     if (gameIdUrl) {
       this.gameId = gameIdUrl;
       console.log("GameId", this.gameId);
-      promise.then(this.join.bind(this));
+      connectionPromise.then(this.join.bind(this));
     }
   }
 
   async start() {
-    let gameId = await this.connection.invoke<string>("CreateGame", this.username).catch((err) => console.error(err));
+    const gameId = await this.connection.invoke<string>("CreateGame", this.username).catch((err) => console.error(err));
     console.log(`Started game: ${gameId}`);
     window.location.href = window.location.origin + '/' + gameId;
   }
 
   async join() {
-    let result = await this.connection.invoke<string>("JoinGame", this.gameId, this.username).catch((err) => console.error(err));
+    const result = await this.connection.invoke<string>("JoinGame", this.gameId, this.username).catch((err) => console.error(err));
     console.log(`Joined ok: ${result}`);
   }
 
@@ -524,11 +546,18 @@ export class AppComponent {
     this.gameAction('Zabiraet');
   }
 
+  canPass(): boolean {
+    return this.username === this.gameState.playerWhoPodkiduvaet
+      && this.gameState.lastConsequencePass < this.gameState.players.length - 1;
+  }
+
   canZabrat(): boolean {
     return this.username === this.gameState.playerWhoOtbivaetsya
-      && this.gameState.table.length > 0
-      && this.gameState.table.some(x => x.item2 === null);
+      && this.gameState.table.some(x => x.item2 === null)
+      && this.gameState.playerWhoOtbivaetsyaZabiraet === false;
   }
+
+
 
   async gameAction(action: any, card?: Card, cardTo?: Card) {
     let result = await this.connection.invoke<string>("GameAction", this.gameId, this.username, action, card, cardTo).catch((err) => console.error(err));
@@ -536,57 +565,58 @@ export class AppComponent {
   }
 
   onDragStart(event: DragEvent) {
-    console.log("drag started", JSON.stringify(event, null, 2));
+    //console.log("drag started", JSON.stringify(event, null, 2));
   }
 
   onDragEnd(event: DragEvent) {
-    console.log("drag ended", JSON.stringify(event, null, 2));
+    //console.log("drag ended", JSON.stringify(event, null, 2));
   }
 
   onDraggableCopied(event: DragEvent) {
-    console.log("draggable copied", JSON.stringify(event, null, 2));
+    //console.log("draggable copied", JSON.stringify(event, null, 2));
   }
 
   onDraggableLinked(event: DragEvent) {
-    console.log("draggable linked", JSON.stringify(event, null, 2));
+    //console.log("draggable linked", JSON.stringify(event, null, 2));
   }
 
   onDraggableMoved(event: DragEvent) {
-    console.log("draggable moved", JSON.stringify(event, null, 2));
+    //console.log("draggable moved", JSON.stringify(event, null, 2));
   }
 
   onDragCanceled(event: DragEvent) {
-    console.log("drag cancelled", JSON.stringify(event, null, 2));
+    //console.log("drag cancelled", JSON.stringify(event, null, 2));
   }
 
   onDragover(event: DragEvent) {
-    console.log("dragover", JSON.stringify(event, null, 2));
+    //console.log("dragover", JSON.stringify(event, null, 2));
   }
 
   onDrop(event: DndDropEvent, cardTo?: Card) {
-    console.log("dropped", JSON.stringify(event, null, 2));
+    //console.log("dropped", JSON.stringify(event, null, 2));
     const card: Card = event.data;
+    console.log("Dropped Card", card, "to", cardTo)
 
-    console.log("CArd", card, "to", cardTo)
-    let action: string = null!;
-    if (!cardTo) {
-      if (this.username == this.gameState.playerWhoHodit) {
-        action = 'Hodit';
+    if (this.username === this.gameState.playerWhoPodkiduvaet) {
+      if (this.gameState.table.flatMap(x => [x.item1, x.item2]).some(x => x?.rank === card.rank)) {
+        this.gameAction('Podkiduvaet', card);
       }
-      if (this.username == this.gameState.playerWhoPodkiduvaet) {
-        action = 'Podkiduvaet';
+      else {
+
       }
     }
-    else {
-      if (this.username == this.gameState.playerWhoOtbivaetsya) {
-        action = 'Otbivaetsya';
+    else if (this.username === this.gameState.playerWhoHodit) {
+      this.gameAction('Hodit', card);
+    }
+    else if (this.username === this.gameState.playerWhoOtbivaetsya) {
+      if (cardTo) {
+        this.gameAction('Otbivaetsya', card, cardTo);
       }
     }
-    this.gameAction(action, card, cardTo);
   }
 
 
-  getImageName(card: Card) {
+  getImageName(card: Card): string {
     let rankName: string = null!;
     switch (card.rank.toLowerCase()) {
       case 'j':
@@ -610,4 +640,52 @@ export class AppComponent {
     const imageName = `/assets/cards/${rankName}_of_${card.suite.toLowerCase()}${add ? '2' : ''}.png`;
     return imageName;
   }
+
+  calcLeft(i: number, length: number) {
+    var startDegrees = 180;
+    var endDegrees = 360;
+
+    var radius = 150;
+    var cx = 1203;
+    var cy = 703;
+    var startRadians = startDegrees * Math.PI / 180,
+      endRadians = endDegrees * Math.PI / 180,
+      stepRadians = (endRadians - startRadians) / (length - 1);
+
+    var startRadians = startDegrees * Math.PI / 180;
+    var a = i * stepRadians + startRadians,
+      x = Math.cos(a) * radius + cx;
+    //y = Math.sin(a)*radiusY + cy;
+    return x;
+  }
+
+
+  calcTop(i: number, length: number) {
+    var startDegrees = 180;
+    var endDegrees = 360;
+
+    var radius = 50;
+    var radiusY = radius;
+    var cx = 1203;
+    var cy = 0;
+    var startRadians = startDegrees * Math.PI / 180,
+      endRadians = endDegrees * Math.PI / 180,
+      stepRadians = (endRadians - startRadians) / (length - 1);
+
+    var startRadians = startDegrees * Math.PI / 180;
+    var a = i * stepRadians + startRadians,
+      y = Math.sin(a) * radiusY + cy;
+    return y;
+  }
+}
+
+
+@Component({
+  selector: 'dialog-content-example-dialog',
+  templateUrl: 'dialog-content-example-dialog.html',
+  standalone: true,
+  imports: [MatDialogModule, MatButtonModule, CommonModule],
+})
+export class DialogContentExampleDialog {
+  constructor(@Inject(MAT_DIALOG_DATA) public data: { proigral: string }) { }
 }

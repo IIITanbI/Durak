@@ -14,15 +14,15 @@ public class CardRanks
 {
     public static readonly Dictionary<string, int> Ranks = new()
     {
-            { "2",  2 },
-            { "3",  3 },
-            { "4",  4 },
-            { "5",  5 },
-            { "6",  6 },
-            { "7",  7 },
-            { "8",  8 },
-            { "9",  9 },
-            { "10", 10 },
+            //{ "2",  2 },
+            //{ "3",  3 },
+            //{ "4",  4 },
+            //{ "5",  5 },
+            //{ "6",  6 },
+            //{ "7",  7 },
+            //{ "8",  8 },
+            //{ "9",  9 },
+            //{ "10", 10 },
             { "J",  11 },
             { "Q",  12 },
             { "K",  13 },
@@ -83,6 +83,7 @@ public class Game
     public string PlayerWhoHodit { get; private set; } = null!;
     public string PlayerWhoPodkiduvaet { get; private set; } = null!;
     public string PlayerWhoOtbivaetsya => GetNextPlayer(PlayerWhoHodit);
+    public string PlayerWhoProigral { get; private set; } = null!;
     //public List<string> OtherPlayers => Players.Except(new string[] { PlayerWhoHodit, PlayerWhoOtbivaetsya }).ToList();
 
     public int TurnNumber { get; private set; } = 0;
@@ -111,7 +112,7 @@ public class Game
         DeckTrumpCard = CardDeck.PeekLast();
 
         int minRank = int.MaxValue;
-        string minRankPlayer = null!;
+        string? minRankPlayer = null;
         foreach (var player in Players)
         {
             var playerCards = PlayerCards[player];
@@ -196,7 +197,7 @@ public class Game
 
                     return;
                 case GameActions.Pass:
-                    if (player != PlayerWhoPodkiduvaet)
+                    if (player != PlayerWhoPodkiduvaet || LastConsequencePass == Players.Count - 1)
                     {
                         throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
                     }
@@ -289,6 +290,8 @@ public class Game
             }
         }
 
+
+
         throw new ArgumentException($"Action '{action}' is not permitted for player '{player}'");
     }
 
@@ -344,6 +347,17 @@ public class Game
         PlayerWhoOtbivaetsyaZabiraet = false;
         LastConsequencePass = 0;
         Logs.Clear();
+
+        var cnt = PlayerCards.Where(x => x.Value.Count > 0).ToList();
+        if (cnt.Count <= 1)
+        {
+            if (cnt.Count == 1)
+            {
+                PlayerWhoProigral = cnt.First().Key;
+            }
+
+            GameState = GameStates.GameEnd;
+        }
     }
 
     public void Otboi()
@@ -360,6 +374,17 @@ public class Game
         PlayerWhoOtbivaetsyaZabiraet = false;
         LastConsequencePass = 0;
         Logs.Clear();
+
+        var cnt = PlayerCards.Where(x => x.Value.Count > 0).ToList();
+        if (cnt.Count <= 1)
+        {
+            if (cnt.Count == 1)
+            {
+                PlayerWhoProigral = cnt.First().Key;
+            }
+
+            GameState = GameStates.GameEnd;
+        }
     }
 
     public void NaborCart()
@@ -398,5 +423,6 @@ public enum GameStates
 {
     PlayerHodit,
     PlayerPodkiduvaetOrPass_OtbivaetsyaOrZabiraet,
+    GameEnd,
 }
 

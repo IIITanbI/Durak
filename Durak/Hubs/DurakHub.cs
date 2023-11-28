@@ -1,6 +1,5 @@
 ﻿using Durak.Logic;
 using Microsoft.AspNetCore.SignalR;
-using System;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
@@ -52,43 +51,61 @@ public class DurakHub : Hub
             GameUsers[gameId][userName] = Context.ConnectionId;
             if (players.Count == gameOptions.PlayerCount)
             {
-                var game = new Game(players);
-                game.StartGame();
-                //game.Table.Add((new PlayingCard("1", CardSuite.Spades), new PlayingCard("2", CardSuite.Hearts)));
-                //game.Table.Add((new PlayingCard("2", CardSuite.Hearts), new PlayingCard("4", CardSuite.Diamonds)));
-                //game.Table.Add((new PlayingCard("3", CardSuite.Clubs), new PlayingCard("A", CardSuite.Clubs)));
-                //game.Table.Add((new PlayingCard("4", CardSuite.Spades), new PlayingCard("2", CardSuite.Diamonds)));
-                //game.Table.Add((new PlayingCard("5", CardSuite.Diamonds), new PlayingCard("Q", CardSuite.Spades)));
-                //game.Table.Add((new PlayingCard("6", CardSuite.Spades), new PlayingCard("J", CardSuite.Diamonds)));
-                Games[gameId] = game;
-
-                foreach (var p in game.Players)
-                {
-                    var pobj = new
-                    {
-                        PlayerCards = game.PlayerCards[p],
-
-                        // general
-                        cardDeckCount = game.CardDeck.Count,
-                        Table = game.Table,
-                        Game = game,
-                        DeckTrumpCard = game.DeckTrumpCard,
-                        OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
-                        Players = game.Players,
-                        game.PlayerWhoHodit,
-                        game.PlayerWhoOtbivaetsya,
-                        game.PlayerWhoPodkiduvaet,
-                        //Action = action,
-                    };
-
-                    var res = JsonSerializer.Serialize(pobj);
-                    //Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", obj);
-                    Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", pobj);
-                }
+                var game = StartGame(players, gameId);
             }
 
             return $"Game '{gameId}' lobby. Users: {string.Join(',', players)}";
         }
+    }
+
+    public string RestartGame(string gameId)
+    {
+        if (!Games.ContainsKey(gameId))
+        {
+            throw new Exception("Game does not exist");
+        }
+
+        if (Games[gameId].GameState != GameStates.GameEnd)
+        {
+            throw new Exception("Game is in progress");
+        }
+
+        StartGame(PlayersLobby[gameId], gameId);
+        return $"Game '{gameId}' lobby. Users: {string.Join(',', PlayersLobby[gameId])}";
+    }
+
+    private Game StartGame(IEnumerable<string> players, string gameId)
+    {
+        var game = new Game(players);
+        game.StartGame();
+        Games[gameId] = game;
+
+        foreach (var p in game.Players)
+        {
+            var gameState = new
+            {
+                PlayerCards = game.PlayerCards[p],
+
+                // general
+                cardDeckCount = game.CardDeck.Count,
+                game.Table,
+                Game = game,
+                gameState = game.GameState,
+                //Action = action,
+                game.DeckTrumpCard,
+                OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
+                game.Players,
+                game.PlayerWhoHodit,
+                game.PlayerWhoOtbivaetsya,
+                game.PlayerWhoPodkiduvaet,
+                game.PlayerWhoProigral,
+                game.LastConsequencePass,
+                game.PlayerWhoOtbivaetsyaZabiraet,
+            };
+            Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", gameState);
+        }
+
+        return game;
     }
 
     public string CreateGame(string userName)
@@ -134,6 +151,7 @@ public class DurakHub : Hub
                     cardDeckCount = game.CardDeck.Count,
                     game.Table,
                     Game = game,
+                    gameState = game.GameState,
                     Action = action,
                     game.DeckTrumpCard,
                     OtherPlayersCards = game.PlayerCards.ToDictionary(x => x.Key, x => x.Value.Count),
@@ -141,6 +159,9 @@ public class DurakHub : Hub
                     game.PlayerWhoHodit,
                     game.PlayerWhoOtbivaetsya,
                     game.PlayerWhoPodkiduvaet,
+                    game.PlayerWhoProigral,
+                    game.LastConsequencePass,
+                    game.PlayerWhoOtbivaetsyaZabiraet,
                 };
                 Clients.Client(GameUsers[gameId][p]).SendAsync("GameState", gameState);
             }
