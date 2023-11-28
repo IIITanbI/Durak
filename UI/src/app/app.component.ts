@@ -59,7 +59,8 @@ interface GameState {
 export class AppComponent {
   title = 'DurakUI';
 
-  username = new Date().getTime().toString();
+
+  username: string = null!;
   connection = new signalR.HubConnectionBuilder()
     .withUrl("/durakHub")
     .build();
@@ -77,10 +78,8 @@ export class AppComponent {
   };
 
   constructor(private route: Router, public dialog: MatDialog) {
-    const connectionPromise = this.connection
-      .start()
-      .then(() => console.log('Connection started', this.connection.connectionId))
-      .catch((err) => document.write(err));
+
+    this.username = window.localStorage.getItem("name") as string;
 
     this.connection.on("GameState", (state) => {
       console.log("GAME STATE", state);
@@ -523,9 +522,28 @@ export class AppComponent {
     if (gameIdUrl) {
       this.gameId = gameIdUrl;
       console.log("GameId", this.gameId);
-      connectionPromise.then(this.join.bind(this));
+    }
+
+    const connectionPromise = this.connection
+      .start()
+      .then(() => {
+        if (this.username) {
+          connectionPromise.then(this.join.bind(this));
+        }
+        console.log('Connection started', this.connection.connectionId);
+      })
+      .catch((err) => document.write(err));
+  }
+
+  setName(username: string) {
+    window.localStorage.setItem("name", username);
+    this.username = username;
+
+    if (this.gameId) {
+      this.join();
     }
   }
+
 
   async start() {
     const gameId = await this.connection.invoke<string>("CreateGame", this.username).catch((err) => console.error(err));
@@ -557,11 +575,20 @@ export class AppComponent {
       && this.gameState.playerWhoOtbivaetsyaZabiraet === false;
   }
 
-
-
   async gameAction(action: any, card?: Card, cardTo?: Card) {
     let result = await this.connection.invoke<string>("GameAction", this.gameId, this.username, action, card, cardTo).catch((err) => console.error(err));
     console.log(`Action ok: ${result}`);
+  }
+
+
+  orderedPlayers() {
+    const index = this.gameState.players.indexOf(this.username);
+    if (index !== -1) {
+      const result = this.gameState.players.slice(index + 1).concat(this.gameState.players.slice(0, index));
+      return result;
+    }
+
+    return this.gameState.players;
   }
 
   onDragStart(event: DragEvent) {

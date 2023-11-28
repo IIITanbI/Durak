@@ -7,7 +7,7 @@ namespace Durak.Hubs;
 
 public class GameOptions
 {
-    public int PlayerCount => 2;
+    public int PlayerCount => 3;
 }
 
 public class DurakHub : Hub
